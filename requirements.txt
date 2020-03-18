@@ -1,0 +1,3 @@
+pycryptodome
+websocket
+websocket-client

@@ -10,26 +10,30 @@ import sys
 import getopt
 import pickle
 import time
+from datetime import datetime
 from utils import OK, Verifier, aes_encode, TIME, generate_nonce, verify_nonce
 
-SHARED_KEY = b'TheForceIsString'  # 16bit AES key
+SHARED_KEY_SERVER = b'TheForceIsStrong'  # 16bit AES key
+SHARED_KEY = b'!ThePathIsClear!'
+TIMESTAMP = 5  # seconds allowed for a key to be valid during the transmission of a message
 
 
-# todo: visualize pretty prints for message exchange
 class Node:
     """
     Node class.
+    It has to send a message to another node, through the server.
     process flow:
-    ( 1 ) N --> S: {N_N}K
-    ( 2 ) S --> N: N_N, {N_S}K
-    ( 3 ) N --> S: N_S
+    ( 1 ) A --> S:  A, {T_A, B, K_AB}K_AS   	where T_A is current time
+    ( 2 ) S --> B:  {T_S, A, K_AB}K_BS   	    where T_S is current time
+
     """
     def __init__(self):
         self.nodesocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server = (HOST, PORT)
         self.aes = SHARED_KEY
+        self.aes_server = SHARED_KEY_SERVER
         self.nodesocket.connect(self.server)
-        self.nonce = None
+        self.timestamp = TIMESTAMP
         self.id = None
 
     def close_connection(self):
@@ -39,24 +43,29 @@ class Node:
         """
         self.nodesocket.close()
 
-    def setup(self):
+    def send(self):
         """
-        nonce creation and setup with the server.
-        ( 1 ) step one of the algorithm
+        send the message in step ( 1 ) -- node is A
+        generate message A, {T_A, B, K_AB}K_AS
         """
-        self.nonce = generate_nonce()
-        # print('nonce: ' + str(self.nonce))
-        n, ciphertext, tag = aes_encode(self.aes, self.nonce)
-        print(Colors.BOLD + 'N --> S: {N_N}K' + Colors.ENDC)
-        print('\t' + Colors.BOLD + 'N_N: ' + Colors.ENDC + str(self.nonce))
-        print('\t' + Colors.BOLD + 'K: ' + Colors.ENDC + str(self.aes))
-        print('\t' + Colors.BOLD + '{N_N}K : (n, c, t)' + Colors.ENDC)
-        # print('sending encrypted, (n, c, t) : (' + str(n) + ', ' + str(ciphertext) + ', ' + str(tag) + ')')
-        to_send = {'dest': 'setup', 'n': n, 'c': ciphertext, 't': tag}  # dictionary to send to the server
+        self.id = 'A'  # identity
+        self.timestamp = datetime.now()  # set the timestamp
+        to_encrypt = {'timestamp': self.timestamp, 'rcv': 'B', 'key': self.aes}  # T_A, B, K_AB
+        n, ciphertext, tag = aes_encode(self.aes_server, pickle.dumps(to_encrypt))  # {T_A, B, K_AB}K_AS
+        # destination is 'first', being this the first step of the protocol
+        to_send = {'dest': 'first', 'sender': self.id, 'n': n, 'c': ciphertext, 't': tag}  # A, {T_A, B, K_AB}K_AS
         self.nodesocket.sendall(pickle.dumps(to_send))
         data = pickle.loads(self.nodesocket.recv(MAX_SIZE))
-        self.id = data['id']  # set the given id from the server
         return data
+
+    def receive(self):
+        """
+        receive message in step ( 2 ) -- node is B
+        :return:
+        """
+        # todo: define receive
+        # todo: server part
+        # todo: implement a waiting cycle in the node.
 
     def final_proof(self, data):
         """

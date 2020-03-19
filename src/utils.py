@@ -20,6 +20,7 @@ ACCEPTED = "202 Accepted"
 NO_CONTENT = "204 No Content"
 NOTFOUND = "404 NOT FOUND"
 TIME = 4
+TIMEOUT = 5  # seconds allowed for a key to be valid during the transmission of a message
 
 MAX_SIZE = 10000
 
@@ -85,6 +86,21 @@ def verify_nonce(n1, n2):
         return True
     else:
         return False
+
+
+def verify_timestamp(timestamp, timeout):
+    """
+
+    :param timestamp:
+    :param timeout:
+    :return: bool verified / not verified
+    """
+    time_now = datetime.now()
+    diff_time = time_now - timestamp
+    if diff_time.seconds > timeout:
+        return False
+    else:
+        return True
 
 
 def generate_nonce(length=8):

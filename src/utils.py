@@ -10,6 +10,7 @@ import socket
 from Crypto.Cipher import AES
 import pickle
 import random
+from datetime import datetime
 
 HOST = socket.gethostbyname(socket.gethostname())
 PORT = 5006
@@ -34,6 +35,10 @@ class Colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+
+ERROR = Colors.FAIL + 'TIMESTAMP NOT VALID!' + Colors.ENDC
+MESSAGE_OK = Colors.OKGREEN + 'Timestamp is valid' + Colors.ENDC
 
 
 class Verifier:

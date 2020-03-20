@@ -1,4 +1,10 @@
 #!/usr/bin/python3
+"""
+Usage:
+    [-k] <binary_key>   : set the binary key to send
+    [-s]                : send mode
+    [-r]                : receive mode
+"""
 
 __author__ = "Enrico Tedeschi"
 __copyright__ = "Copyright 2020, Arctic University of Norway"
@@ -11,12 +17,10 @@ import getopt
 import pickle
 import time
 from datetime import datetime
-from utils import OK, Verifier, aes_encode, TIME, generate_nonce, verify_nonce, TIMEOUT
+from utils import OK, Verifier, aes_encode, TIME, generate_nonce, verify_nonce, TIMEOUT, ERROR, MESSAGE_OK
 
 SHARED_KEY_SERVER = b'TheForceIsStrong'  # 16bit AES key
 SHARED_KEY = b'!ThePathIsClear!'
-ERROR = Colors.FAIL + 'TIMESTAMP NOT VALID!' + Colors.ENDC
-MESSAGE_OK = Colors.OKGREEN + 'Timestamp is valid' + Colors.ENDC
 
 
 class Node:
@@ -56,20 +60,23 @@ class Node:
         self.timestamp = datetime.now()  # set the timestamp
         to_encrypt = {'timestamp': self.timestamp, 'rcv': 'B', 'key': self.aes}  # T_A, B, K_AB
         n, ciphertext, tag = aes_encode(self.aes_server, pickle.dumps(to_encrypt))  # {T_A, B, K_AB}K_AS
-        # destination is 'first', being this the first step of the protocol
-        to_send = {'dest': 'first', 'sender': self.id, 'n': n, 'c': ciphertext, 't': tag}  # A, {T_A, B, K_AB}K_AS
+        # destination is 'send', telling the server this is the sender
+        to_send = {'dest': 'send', 'sender': self.id, 'n': n, 'c': ciphertext, 't': tag}  # A, {T_A, B, K_AB}K_AS
         self.nodesocket.sendall(pickle.dumps(to_send))
         data = pickle.loads(self.nodesocket.recv(MAX_SIZE))
         return data
 
-    def receive(self, data):
+    def receive(self):
         """
         receive message in step ( 2 ) -- node is B
         message: {T_S, A, K_AB}K_BS
-        :param data:
         :return:
         """
-        # todo: test this method
+        to_send = {'dest': 'recv'}
+        self.nodesocket.sendall(pickle.dumps(to_send))
+        data = pickle.loads(self.nodesocket.recv(MAX_SIZE))
+        if data['ts'] == ERROR:
+            return ERROR
         n = data['n']
         c = data['c']
         t = data['t']
@@ -87,21 +94,26 @@ class Node:
 
 def main(argv):
     try:
-        _, _ = getopt.getopt(argv, "k:", ["key="])
-    except getopt.GetoptError:
-        print("node.py -k <binary_key>")
-        sys.exit(2)
-    c = Node()
-    data = c.setup()
-    n_n = data['n_n']
-    if verify_nonce(n_n, c.nonce):
+        opts, args = getopt.getopt(argv, "srk:", ["key="])  # send, receive, key
+        for opt, arg in opts:
+            if opt == '-s' or opt == '-k':
+                # sender options
+                input("Press Enter to send...")
+                c = Node()
+                if opt == '-k':
+                    # set up new key
+                    c.aes = arg.encode('utf-8')
+                received = c.send()
+                print(received['ts'])
+            elif opt == '-r':
+                # receive
+                input("Press Enter to receive...")
+                c = Node()
+                print(c.receive())
 
-        data = c.final_proof(data)
-        print(data)
-    else:
-        print("ERROR: Server Key is not verified!")
-        data = c.final_proof(data)
-        print(data)
+    except getopt.GetoptError:
+        print(__doc__)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

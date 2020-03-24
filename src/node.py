@@ -55,10 +55,9 @@ class Node:
         send the message in step ( 1 ) -- node is A
         generate message A, {T_A, B, K_AB}K_AS
         """
-        # todo: test this method
         self.id = 'A'  # identity
         self.timestamp = datetime.now()  # set the timestamp
-        to_encrypt = {'timestamp': self.timestamp, 'rcv': 'B', 'key': self.aes}  # T_A, B, K_AB
+        to_encrypt = {'timestamp': self.timestamp, 'comm': 'B', 'key': self.aes}  # T_A, B, K_AB
         n, ciphertext, tag = aes_encode(self.aes_server, pickle.dumps(to_encrypt))  # {T_A, B, K_AB}K_AS
         # destination is 'send', telling the server this is the sender
         to_send = {'dest': 'send', 'sender': self.id, 'n': n, 'c': ciphertext, 't': tag}  # A, {T_A, B, K_AB}K_AS
@@ -81,7 +80,7 @@ class Node:
         c = data['c']
         t = data['t']
         message = pickle.loads(aes_decode(n, c, t, self.aes_server))  # decode the message
-        self.id_comm = message['sender']
+        self.id_comm = message['comm']
         self.timestamp = message['timestamp']
         if verify_timestamp(self.timestamp, self.timeout):
             # accept key

@@ -55,11 +55,11 @@ class ClientThread(threading.Thread):
                 message = pickle.loads(aes_decode(n, c, t, self.aes))  # message = {T_A, B, K_AB}
                 self.timestamp = message['timestamp']
                 self.aes_client = message['key']
-                self.receiver = message['rcv']
+                self.receiver = message['comm']
                 if verify_timestamp(self.timestamp, self.timeout):
                     # verified, make the message
                     self.timestamp = datetime.now()
-                    to_encrypt = {'timestamp': self.timestamp, 'sender': 'A', 'key': self.aes_client}  # T_S, A, K_AB
+                    to_encrypt = {'timestamp': self.timestamp, 'comm': 'A', 'key': self.aes_client}  # T_S, A, K_AB
                     n, ciphertext, tag = aes_encode(self.aes, pickle.dumps(to_encrypt))  # {T_S, A, K_AB}K_BS
                     message_to_send = {'n': n, 'c': ciphertext, 't': tag, 'ts': MESSAGE_OK}
                     self.csocket.sendall(pickle.dumps({'ts': MESSAGE_OK}))

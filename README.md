@@ -50,7 +50,7 @@ Libraries used, you might require to install:
 1. pycryptodome
 2. websocket
 3. websocket-client
-<!--- 
+
 These libraries are listed in the `requirements.txt` file. So the only command you need to run is:
 ```bash
 pip install -r requirements.txt
@@ -58,7 +58,7 @@ pip install -r requirements.txt
 
 However, if you want to install single package just use:
 ```bash
-❯ pip install pycryptodome
+❯ pip install <package_name>
 ```
 
 To check you comply with the requirements you can check with:
@@ -71,62 +71,71 @@ No broken requirements found.
 The scripts and folders are the following:
 ```
 .
-├── [3.1K]  README.md
-└── [ 16K]  src
-    ├── [3.4K]  evil_node.py
-    ├── [2.8K]  node.py
+├── [4.2K]  README.md
+├── [  40]  requirements.txt
+└── [ 14K]  src
+    ├── [2.7K]  evil_node.py
+    ├── [3.8K]  node.py
     ├── [4.8K]  server.py
-    └── [2.1K]  utils.py
+    └── [2.6K]  utils.py
 ```
-* The `node.py` script implements an honest node, sharing `K` with `S`;
-* The `evil_node.py` implements an instance of `E`, and even if it does not
-share the same `K` with `S`, it makes `S` believe it does;
-* `utils.py` contains some useful functions shared by both parties;
-* `server.py` implements the party that makes sure a new node has the shared `K`. Hence
-gives an approval or a denial to the connecting node `N`.
 
-## Running
-To run the scripts open two different sessions, node and server.
+* The `node.py` script implements an honest node, which wants to share a key `K_AB` through
+`S`, with `A` and `B`;
+* The `evil_node.py` implements an instance of `T`, and its purpose is to make the server
+`S` to keep extending the timestamp for which `K_AB` is valid;
+* `utils.py` contains some useful functions shared by both parties;
+* `server.py` implements a trusted authority `S`.
+
+## Running Honestly
+To run the scripts open three different sessions, sender, receiver and server.
 In the server session:
 ```bash
 ❯ python server.py
 Listening on: 127.0.0.1:8300
 ... waiting for a connection
 ```
-In the node session:
+In the sender session, the default key or a new personalized one can be used.
+While the receiver session makes the node ready to listen the message with the
+key from the server.
+```
+p node.py   [-s]                : send mode
+            [-k] <binary_key>   : set the binary key to send
+            [-r]                : receive mode
+```
+Run first the sender session then press Enter to send the key at the time you decide.
 ```bash
-❯ python node.py
+❯ python node.py -s
+Press Enter to send...
+Timestamp is valid
+```
+
+To receive the message, before the timestamp will expire, in the receiver session:
+```bash
+❯ python node.py -r
+Press Enter to receive...
 The message is authentic!
-CONGRATULATIONS, YOU ARE VERIFIED!
+Timestamp is valid
 ```
-And the result back in the server session:
+If you run the script after the timeout we set, then you get this:
 ```bash
-Got a connection from ('127.0.0.1', 64756)
-New connection added:  ('127.0.0.1', 64756)
-Connection from :  ('127.0.0.1', 64756)
-The message is authentic!
-Client at  ('127.0.0.1', 64756)  disconnected...
+❯ python node.py -r
+Press Enter to receive...
+TIMESTAMP NOT VALID!
 ```
 
-### Running without K
-
-If the node does not share the same key `K`, then the outcome is in node session:
-
+## Running Evil Node
+Due to the faults in the server protocol, it is possible make the timestamp valid
+even if the key shared by the two parties is arbitrary old. If the evil node is performed
+fast enough (before the timeout), then it is possible to extend the validity of the key.
+* Run the server;
+* Run the node and send the message;
+* Run the evil node in another session:
 ```bash
-❯ python node.py
-ERROR: Server Key is not verified!
-Key incorrect or message corrupted!
-ERROR: Ah-ah-ah! You didn't say the magic word!
+python evil_node.py
 ```
-While in the server session:
-```bash
-Got a connection from ('127.0.0.1', 65113)
-New connection added:  ('127.0.0.1', 65113)
-Connection from :  ('127.0.0.1', 65113)
-Key incorrect or message corrupted!
-Client at  ('127.0.0.1', 65113)  disconnected...
-```
---->
+* Run the receiver, fast enough (before the timeout from the end of the evil_node script).
+
 ## Authors
 
-* **Enrico Tedeschi** - *Initial work* - [reflection_attack](https://github.com/ted92/key_exchange_attack)
+* **Enrico Tedeschi** - *Initial work* - [reflection_attack](https://github.com/ted92/replay_attack)

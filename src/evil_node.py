@@ -1,94 +1,83 @@
 #!/usr/bin/python3
 
-# todo: implement evil node
 __author__ = "Enrico Tedeschi"
 __copyright__ = "Copyright 2020, Arctic University of Norway"
 __email__ = "enrico.tedeschi@uit.no"
 
-from utils import Colors, MAX_SIZE, PORT, HOST, aes_decode
-from node import Node
+from utils import Colors, MAX_SIZE, PORT, HOST, aes_decode, verify_timestamp
 import socket
 import sys
 import getopt
 import pickle
 import time
-from utils import OK, Verifier, aes_encode, TIME, generate_nonce, verify_nonce
+from datetime import datetime
+from node import Node
+from utils import OK, Verifier, aes_encode, TIME, generate_nonce, verify_nonce, TIMEOUT, ERROR, MESSAGE_OK
 
-KEY = b'TheForceIsString'  # 16bit AES key
+# the evil node does not have K_AB
+CYCLES = 10  # to make the key arbitrary long
 
 
-class ENode(Node):
+class EvilNode(Node):
     """
-    Node class which performs a REFLECTION ATTACK
+    EvilNode class.
+    For simplicity, it implements only the 2-phase-loop.
+    We assume that the EvilNode has already the encrypted information from A and B.
+    We implement the receiver (B side) evil version of the Node. Which means that this script will maintain the
+    K_AB valid for more than it is allowed to.
+
     process flow:
-    ( 1 )   E --> S: N_E							    .1
-    ( 2 )   S --> E: {N_S}K, {N_E}_DECRYPTED_WITH_K	    .1
-    ( 3 )   E --> S: {N_S}K							    .2
-    ( 4 )   S --> E: {N_S2}, N_S					    .2
-    ( 5 )   E --> S: N_S							    .1
-
+    ( 1 ) A --> T(S): A, {T_A, B, K_AB}K_AS	        T intercept the message, T has A
+    ( 2 ) T(A) --> S: A, {T_A, B, K_AB}K_AS	        Resend same message fast enough
+    ( 3 ) S --> T(B): {T_S, A, K_AB}K_BS		    T intercepts message for B
+    ( 4 ) T(B) --> S: B, {T_S, A, K_AB}K_BS	        fast enough		                    1. Loop <--
+    ( 5 ) S --> T(A): {T_Su, B, K_AB}K_AS		    Timestamp is updated	            2. Loop <--
+    ( 6 ) T(A) --> S: A, {T_Su, B, K_AB}K_AS	    Final request
+    ( 7 ) S --> B: {T_Su, A, K_AB}K_BS   		    K_AB is expired
     """
 
-    def setup(self, n='', ciphertext='', tag=''):
+    def __init__(self):
+        super().__init__()
+        self.message = {}  # saved the message to be sent
+
+    def send(self):
         """
-        :param n: fixed nonce
-        :param ciphertext: fixed ciphertext
-        :param tag: fixed tag
-        nonce creation and setup with the server.
-        ( 1 ) step one of the algorithm
+        send the message B, {T_S, A, K_AB}K_BS where the encrypted part is what the server sent
+        :return:
         """
-        self.nonce = generate_nonce()
-        if n == '':
-            n, ciphertext, tag = aes_encode(self.aes, self.nonce)
-        to_send = {'dest': 'setup', 'n': n, 'c': ciphertext, 't': tag}  # dictionary to send to the server
+        self.id = 'B'  # identity
+        to_send = self.message
+        to_send['dest'] = 'send'
+        to_send['sender'] = self.id
         self.nodesocket.sendall(pickle.dumps(to_send))
         data = pickle.loads(self.nodesocket.recv(MAX_SIZE))
-        self.id = data['id']  # set the given id from the server
         return data
 
-    def final_proof(self, data, n_s=''):
+    def receive(self):
         """
-        send the final proof back, server nonce in plaintext
-        :param data:    dict, data received from the server
-                        {   'n_n'   : N_N,
-                            'n'     : nonce_encryption,
-                            'c'     : ciphertext,
-                            't'     : tag }
-        :param n_s: nonce of the server already fetched
-        ( 3 ) step three of the algorithm
+        receive message in step ( 3 ) -- node is T(B).
+        Then the loop ( 4 ) - ( 5 ) starts.
+        Message received: {T_S, A, K_AB}K_BS
+        :return:
         """
-        if n_s == '':
-            n = data['n']
-            c = data['c']
-            t = data['t']
-            n_s = aes_decode(n, c, t, self.aes)
-        to_send = {'id': self.id, 'dest': 'confirmation', 'n': n_s}
+        to_send = {'dest': 'recv'}
         self.nodesocket.sendall(pickle.dumps(to_send))
-        data_return = pickle.loads(self.nodesocket.recv(MAX_SIZE))
-        return data_return
+        data = pickle.loads(self.nodesocket.recv(MAX_SIZE))
+        self.message = data
 
 
-def main(argv):
-    try:
-        _, _ = getopt.getopt(argv, "p:", ["path="])
-    except getopt.GetoptError:
-        print("node.py -p <file_path>")
-        sys.exit(2)
-    c1 = ENode()  # first session open
-    data = c1.setup()  # data should contain the step ( 2 ) of the algorithm
-    n = data['n']
-    c = data['c']
-    t = data['t']
-    # { 'n_n': N_N, 'n': nonce_encryption, 'c': ciphertext, 't': tag }
-    c2 = ENode()
-    data = c2.setup(n, c, t)
-    n_n = data['n_n']
-    if not verify_nonce(n_n, c1.nonce):
-        print("ERROR: Server Key is not verified!")
-        # if server verified the nonce, then continues with step ( 3 )
-    data = c1.final_proof(data, n_n)  # n_n now is the "n_s" in plaintext since the server decrypted it
-    print(data)
+def main():
+    """
+    - the evil node will receive the message that was supposed to be for B.
+    - it creates a cycle which send / receive and makes S to update the timestamp
+    - they key K_AB appears to be valid even after the timeout
+    """
+    e = EvilNode()
+    for i in range(0, CYCLES):
+        e.receive()
+        _ = e.send()
+        time.sleep(2)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
